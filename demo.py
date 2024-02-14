@@ -12,9 +12,10 @@ from networks.transforms import Resize
 from networks.transforms import PrepareForNet
 from tqdm import tqdm
 
-def write_img(filename, output_list, output_names, is_colored: bool):
+def write_img(model_name: str,filename: str, output_list, output_names, is_colored: bool):
     assert (len(output_list) > 0)
-    filename += "_result"
+    filename += "_" + model_name + "_result"
+
     # prepare output folder
     if is_colored:
         filename += "_colored"
@@ -36,6 +37,7 @@ def load_video_paths(args):
     root_path = args.input
     output_path = args.output
     scene_names = sorted(os.listdir(root_path))
+    
     path_lists = []
     dict_output_names = {}
     ignored= {"all_file.txt", "bg_img.txt", ".directory"}
@@ -47,6 +49,12 @@ def load_video_paths(args):
 
     return path_lists, scene_names, dict_output_names
 
+def color(output_list):
+    color_list = []
+    for j in range(len(output_list)):
+        frame_color = cv2.applyColorMap(output_list[j], cv2.COLORMAP_INFERNO)
+        color_list.append(frame_color)
+    return color_list
 
 def run(args):
     print("Initialize")
@@ -121,15 +129,12 @@ def run(args):
         output_list = [process_depth(out) for out in output_list]
 
         # Writes grayscale output
-        write_img(output_name, output_list, dict_output_names[scene_names[i]], False)
 
-        color_list = []
-        for j in range(len(output_list)):
-            frame_color = cv2.applyColorMap(output_list[j], cv2.COLORMAP_INFERNO)
-            color_list.append(frame_color)
-            
+        write_img(args.model_name, output_name, output_list, dict_output_names[scene_names[i]], False)
+    
         # Writes colored output
-        write_img(output_name, color_list, dict_output_names[scene_names[i]], True)
+        color_list = color(output_list)
+        write_img(args.model_name, output_name, color_list, dict_output_names[scene_names[i]], True)
 
     print(args.output + " Done.")
 
@@ -145,6 +150,7 @@ if __name__ == "__main__":
     parser.add_argument('--resume', type=str, required=True, help='path to checkpoint file')
     parser.add_argument('--input', default='./input', type=str, help='video root path')
     parser.add_argument('--output', default='./output', type=str, help='path to save output')
+    parser.add_argument('--model_name', default= "TCMD", type=str)
     parser.add_argument('--resize_size',
                         type=int,
                         default=384,
@@ -153,7 +159,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    print("Run Video Depth Sample ")
+    print("Run")
     run(args)
 
+# Example:
 # python demo.py --model large --resume ./weights/_ckpt.pt.tar --input ./videos --output ./output --resize_size 384
