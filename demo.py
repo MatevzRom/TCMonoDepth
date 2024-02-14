@@ -15,6 +15,7 @@ from tqdm import tqdm
 def write_img(model_name: str,filename: str, output_list, output_names, is_colored: bool):
     assert (len(output_list) > 0)
     filename += "_" + model_name + "_result"
+
     # prepare output folder
     if is_colored:
         filename += "_colored"
@@ -34,6 +35,7 @@ def process_depth(dep):
 
 def load_video_paths(args):
     root_path = args.input
+    output_path = args.output
     scene_names = sorted(os.listdir(root_path))
     
     path_lists = []
@@ -127,6 +129,7 @@ def run(args):
         output_list = [process_depth(out) for out in output_list]
 
         # Writes grayscale output
+
         write_img(args.model_name, output_name, output_list, dict_output_names[scene_names[i]], False)
     
         # Writes colored output
@@ -158,5 +161,6 @@ if __name__ == "__main__":
 
     print("Run")
     run(args)
+
 # Example:
 # python demo.py --model large --resume ./weights/_ckpt.pt.tar --input ./videos --output ./output --resize_size 384
