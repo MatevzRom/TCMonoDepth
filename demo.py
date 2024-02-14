@@ -12,18 +12,17 @@ from networks.transforms import Resize
 from networks.transforms import PrepareForNet
 from tqdm import tqdm
 
-
-def write_video(filename, output_list, fps=24):
+def write_img(model_name: str,filename: str, output_list, output_names, is_colored: bool):
     assert (len(output_list) > 0)
-    h, w = output_list[0].shape[0], output_list[0].shape[1]
-    writer = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+    filename += "_" + model_name + "_result"
+    # prepare output folder
+    if is_colored:
+        filename += "_colored"
+    os.makedirs(filename, exist_ok=True)
 
-    for img in output_list:
-        writer.write(img)
-    writer.release()
-
+    for index, img in enumerate(output_list):
+        cv2.imwrite(filename +"/"+ output_names[index], img)
     return
-
 
 def process_depth(dep):
     dep = dep - dep.min()
@@ -36,14 +35,24 @@ def process_depth(dep):
 def load_video_paths(args):
     root_path = args.input
     scene_names = sorted(os.listdir(root_path))
+    
     path_lists = []
+    dict_output_names = {}
+    ignored= {"all_file.txt", "bg_img.txt", ".directory"}
     for scene in scene_names:
-        frame_names = sorted(os.listdir(os.path.join(root_path, scene)))
+        frame_names = sorted([x for x in os.listdir(os.path.join(root_path, scene)) if x not in ignored])
         frame_paths = [os.path.join(root_path, scene, name) for name in frame_names]
         path_lists.append(frame_paths)
+        dict_output_names[scene] = frame_names
 
-    return path_lists, scene_names
+    return path_lists, scene_names, dict_output_names
 
+def color(output_list):
+    color_list = []
+    for j in range(len(output_list)):
+        frame_color = cv2.applyColorMap(output_list[j], cv2.COLORMAP_INFERNO)
+        color_list.append(frame_color)
+    return color_list
 
 def run(args):
     print("Initialize")
@@ -73,8 +82,8 @@ def run(args):
 
     transform = Compose([
         Resize(
-            args.resize_size[0],  #width
-            args.resize_size[1],  #height
+            args.resize_size,  #width
+            args.resize_size,  #height
             resize_target=None,
             keep_aspect_ratio=True,
             ensure_multiple_of=32,
@@ -85,7 +94,7 @@ def run(args):
     ])
 
     # get input
-    path_lists, scene_names = load_video_paths(args)
+    path_lists, scene_names, dict_output_names = load_video_paths(args)
 
     # prepare output folder
     os.makedirs(args.output, exist_ok=True)
@@ -112,18 +121,19 @@ def run(args):
                 output_list.append(prediction)
 
         # save output
-        output_name = os.path.join(args.output, scene_names[i] + '.mp4')
+        # output_name without file type ending
+        output_name = os.path.join(args.output, scene_names[i])
+        
         output_list = [process_depth(out) for out in output_list]
 
-        color_list = []
-        for j in range(len(output_list)):
-            frame_color = cv2.applyColorMap(output_list[j], cv2.COLORMAP_INFERNO)
-            color_list.append(frame_color)
-
-        write_video(output_name, color_list)
+        # Writes grayscale output
+        write_img(args.model_name, output_name, output_list, dict_output_names[scene_names[i]], False)
+    
+        # Writes colored output
+        color_list = color(output_list)
+        write_img(args.model_name, output_name, color_list, dict_output_names[scene_names[i]], True)
 
     print(args.output + " Done.")
-
 
 if __name__ == "__main__":
     # set torch options
@@ -135,14 +145,18 @@ if __name__ == "__main__":
 
     parser.add_argument('--model', default='large', choices=['small', 'large'], help='size of the model')
     parser.add_argument('--resume', type=str, required=True, help='path to checkpoint file')
-    parser.add_argument('--input', default='./videos', type=str, help='video root path')
+    parser.add_argument('--input', default='./input', type=str, help='video root path')
     parser.add_argument('--output', default='./output', type=str, help='path to save output')
+    parser.add_argument('--model_name', default= "TCMD", type=str)
     parser.add_argument('--resize_size',
                         type=int,
                         default=384,
                         help="spatial dimension to resize input (default: small model:256, large model:384)")
+    parser
 
     args = parser.parse_args()
 
-    print("Run Video Depth Sample ")
+    print("Run")
     run(args)
+# Example:
+# python demo.py --model large --resume ./weights/_ckpt.pt.tar --input ./videos --output ./output --resize_size 384
